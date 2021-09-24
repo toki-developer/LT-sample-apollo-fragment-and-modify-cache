@@ -2,6 +2,7 @@ import { gql } from "@apollo/client";
 import type { VFC } from "react";
 import { useState } from "react";
 import type { TodoFragment } from "src/apollo/graphql";
+import { TodoFragmentDoc } from "src/apollo/graphql";
 import { useUpdateTodoMutation } from "src/apollo/graphql";
 import { useAddTodoMutation } from "src/apollo/graphql";
 import { useGetUserQuery } from "src/apollo/graphql";
@@ -39,7 +40,23 @@ const Todo: VFC<TodoType> = ({ todo }) => {
 const Home = () => {
   const [todo, setTodo] = useState<string>("");
   const { data } = useGetUserQuery({ variables: { id: 1 } });
-  const [addTodo] = useAddTodoMutation();
+  const [addTodo] = useAddTodoMutation({
+    update(cache, { data }) {
+      cache.modify({
+        id: cache.identify({ id: 1, __typename: "users" }),
+        fields: {
+          todos(existing = []) {
+            const newTodoRef = cache.writeFragment({
+              data: data?.insert_todos_one,
+              fragment: TodoFragmentDoc,
+            });
+            return [...existing, newTodoRef];
+          },
+        },
+      });
+    },
+  });
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setTodo(e.target.value);
   };
@@ -87,10 +104,7 @@ gql`
       id
       name
       todos {
-        id
-        title
-        created_at
-        updated_at
+        ...Todo
       }
     }
   }
